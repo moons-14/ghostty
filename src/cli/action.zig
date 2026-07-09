@@ -27,6 +27,12 @@ pub fn detectArgs(comptime E: type, alloc: Allocator) !?E {
 ///
 ///   fn detectSpecialCase(arg: []const u8) ?SpecialCase(E)
 ///
+/// If the type E has a decl `detectAlias`, then it will be called for
+/// unknown `+` actions to support backwards-compatible spellings. The function
+/// signature for `detectAlias` should be:
+///
+///   fn detectAlias(name: []const u8) ?E
+///
 pub fn detectIter(
     comptime E: type,
     iter: anytype,
@@ -47,8 +53,13 @@ pub fn detectIter(
         // Commands must start with "+"
         if (arg.len == 0 or arg[0] != '+') continue;
         if (pending != null) return DetectError.MultipleActions;
-        pending = std.meta.stringToEnum(E, arg[1..]) orelse
+        pending = std.meta.stringToEnum(E, arg[1..]) orelse alias: {
+            if (@hasDecl(E, "detectAlias")) {
+                if (E.detectAlias(arg[1..])) |action| break :alias action;
+            }
+
             return DetectError.InvalidAction;
+        };
     }
 
     // If we have an action, we always return that action, even if we've
@@ -104,6 +115,56 @@ test "detect invalid match" {
     defer iter.deinit();
     try testing.expectError(
         DetectError.InvalidAction,
+        detectIter(Enum, &iter),
+    );
+}
+
+test "detect alias" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const Enum = enum {
+        foo,
+        bar,
+
+        fn detectAlias(name: []const u8) ?@This() {
+            return if (std.mem.eql(u8, name, "renamed"))
+                .foo
+            else
+                null;
+        }
+    };
+
+    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        alloc,
+        "+renamed",
+    );
+    defer iter.deinit();
+    const result = try detectIter(Enum, &iter);
+    try testing.expectEqual(Enum.foo, result.?);
+}
+
+test "detect alias multiple actions" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const Enum = enum {
+        foo,
+        bar,
+
+        fn detectAlias(name: []const u8) ?@This() {
+            return if (std.mem.eql(u8, name, "renamed"))
+                .foo
+            else
+                null;
+        }
+    };
+
+    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        alloc,
+        "+renamed +bar",
+    );
+    defer iter.deinit();
+    try testing.expectError(
+        DetectError.MultipleActions,
         detectIter(Enum, &iter),
     );
 }

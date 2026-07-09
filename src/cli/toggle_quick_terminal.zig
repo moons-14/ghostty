@@ -19,7 +19,8 @@ pub const Options = struct {
 };
 
 /// The `+toggle-quick-terminal` command will use native platform IPC to toggle
-/// the quick terminal in a running instance of Ghostty.
+/// the quick terminal in a running instance of Ghostty. For consistency with
+/// the keybind action name, `+toggle_quick_terminal` is accepted as an alias.
 ///
 /// If the `--class` flag is not set, the command will try and connect to the
 /// default running Ghostty instance. Otherwise it will contact a Ghostty
