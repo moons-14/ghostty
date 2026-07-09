@@ -81,6 +81,14 @@ pub const Action = enum {
     // Use IPC to tell the running Ghostty to toggle the quick terminal.
     @"toggle-quick-terminal",
 
+    pub fn detectAlias(name: []const u8) ?Action {
+        if (std.mem.eql(u8, name, "toggle_quick_terminal")) {
+            return .@"toggle-quick-terminal";
+        }
+
+        return null;
+    }
+
     pub fn detectSpecialCase(arg: []const u8) ?SpecialCase(Action) {
         // If we see a "-e" and we haven't seen a command yet, then
         // we are done looking for commands. This special case enables
@@ -290,6 +298,19 @@ test "parse action plus" {
         const action = try actionpkg.detectIter(Action, &iter);
         try testing.expect(action.? == .version);
     }
+}
+
+test "parse action plus alias" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        alloc,
+        "+toggle_quick_terminal",
+    );
+    defer iter.deinit();
+    const action = try actionpkg.detectIter(Action, &iter);
+    try testing.expect(action.? == .@"toggle-quick-terminal");
 }
 
 test "parse action plus ignores -e" {

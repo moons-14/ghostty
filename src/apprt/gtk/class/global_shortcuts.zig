@@ -79,6 +79,9 @@ pub const GlobalShortcuts = extern struct {
         /// The ID is guaranteed to be non-zero, so we can use 0 to indicate null.
         activate_subscription: c_uint = 0,
 
+        /// Whether the current portal exposes the GlobalShortcuts interface.
+        portal_supported: ?bool = null,
+
         pub var offset: c_int = 0;
     };
 
@@ -211,7 +214,64 @@ pub const GlobalShortcuts = extern struct {
         priv.arena = arena;
 
         // Create our session if we have global shortcuts.
-        if (priv.map.count() > 0) try self.request(.create_session);
+        if (priv.map.count() > 0 and self.portalSupported()) {
+            try self.request(.create_session);
+        }
+    }
+
+    fn portalSupported(self: *Self) bool {
+        const priv = self.private();
+        if (priv.portal_supported) |supported| return supported;
+
+        const dbus = priv.dbus_connection orelse {
+            priv.portal_supported = false;
+            return false;
+        };
+
+        const reply_type = glib.VariantType.new("(s)");
+        defer glib.free(reply_type);
+
+        var err: ?*glib.Error = null;
+        defer if (err) |e| e.free();
+
+        const reply = dbus.callSync(
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.DBus.Introspectable",
+            "Introspect",
+            null,
+            reply_type,
+            .{},
+            -1,
+            null,
+            &err,
+        ) orelse {
+            if (err) |e| {
+                log.debug("global shortcuts portal introspection failed code={} err={s}", .{
+                    e.f_code,
+                    e.f_message orelse "(unknown)",
+                });
+            }
+
+            priv.portal_supported = false;
+            return false;
+        };
+        defer reply.unref();
+
+        var xml: [*:0]const u8 = undefined;
+        reply.get("(&s)", &xml);
+
+        const supported = std.mem.indexOf(
+            u8,
+            std.mem.span(xml),
+            "org.freedesktop.portal.GlobalShortcuts",
+        ) != null;
+        if (!supported) {
+            log.debug("global shortcuts portal is unavailable", .{});
+        }
+
+        priv.portal_supported = supported;
+        return supported;
     }
 
     const Method = enum {
@@ -513,6 +573,7 @@ pub const GlobalShortcuts = extern struct {
             self.close();
             v.unref();
             priv.dbus_connection = null;
+            priv.portal_supported = null;
         }
 
         priv.dbus_connection = null;
