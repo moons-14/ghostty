@@ -11,8 +11,8 @@ pub const DetectError = error{
 };
 
 /// Detect the action from CLI args.
-pub fn detectArgs(comptime E: type, alloc: Allocator) !?E {
-    var iter = try std.process.argsWithAllocator(alloc);
+pub fn detectArgs(comptime E: type, alloc: Allocator, args: std.process.Args) !?E {
+    var iter = try args.iterateAllocator(alloc);
     defer iter.deinit();
     return try detectIter(E, &iter);
 }
@@ -94,7 +94,7 @@ test "detect direct match" {
     const alloc = testing.allocator;
     const Enum = enum { foo, bar, baz };
 
-    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+    var iter = try std.process.Args.IteratorGeneral(.{}).init(
         alloc,
         "+foo",
     );
@@ -108,7 +108,7 @@ test "detect invalid match" {
     const alloc = testing.allocator;
     const Enum = enum { foo, bar, baz };
 
-    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+    var iter = try std.process.Args.IteratorGeneral(.{}).init(
         alloc,
         "+invalid",
     );
@@ -174,7 +174,7 @@ test "detect multiple actions" {
     const alloc = testing.allocator;
     const Enum = enum { foo, bar, baz };
 
-    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+    var iter = try std.process.Args.IteratorGeneral(.{}).init(
         alloc,
         "+foo +bar",
     );
@@ -190,7 +190,7 @@ test "detect no match" {
     const alloc = testing.allocator;
     const Enum = enum { foo, bar, baz };
 
-    var iter = try std.process.ArgIteratorGeneral(.{}).init(
+    var iter = try std.process.Args.IteratorGeneral(.{}).init(
         alloc,
         "--some-flag",
     );
@@ -215,7 +215,7 @@ test "detect special case action" {
     };
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "--special +bar",
         );
@@ -225,7 +225,7 @@ test "detect special case action" {
     }
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "+bar --special",
         );
@@ -235,7 +235,7 @@ test "detect special case action" {
     }
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "+bar",
         );
@@ -261,7 +261,7 @@ test "detect special case fallback" {
     };
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "--special",
         );
@@ -271,7 +271,7 @@ test "detect special case fallback" {
     }
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "+bar --special",
         );
@@ -281,7 +281,7 @@ test "detect special case fallback" {
     }
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "--special +bar",
         );
@@ -307,7 +307,7 @@ test "detect special case abort_if_no_action" {
     };
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "-e",
         );
@@ -317,7 +317,7 @@ test "detect special case abort_if_no_action" {
     }
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "+foo -e",
         );
@@ -327,7 +327,7 @@ test "detect special case abort_if_no_action" {
     }
 
     {
-        var iter = try std.process.ArgIteratorGeneral(.{}).init(
+        var iter = try std.process.Args.IteratorGeneral(.{}).init(
             alloc,
             "-e +bar",
         );
