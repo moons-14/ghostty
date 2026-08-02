@@ -1,0 +1,84 @@
+name: Sync upstream
+
+on:
+  # GitHub Actions の cron は UTC。
+  # 毎日 18:23 UTC = 翌日 03:23 JST に実行する。
+  schedule:
+    - cron: "23 18 * * *"
+
+  # Actions画面から手動実行できるようにする。
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  # 上流リポジトリ
+  UPSTREAM_REPOSITORY: ghostty-org/ghostty
+
+  # 取り込む上流ブランチ
+  UPSTREAM_BRANCH: main
+
+  # パッチを載せているフォーク側ブランチ
+  TARGET_BRANCH: main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream \
+            "https://github.com/${UPSTREAM_REPOSITORY}.git"
+
+          git fetch \
+            --no-tags \
+            upstream \
+            "${UPSTREAM_BRANCH}"
+
+      - name: Merge upstream
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          upstream_ref="upstream/${UPSTREAM_BRANCH}"
+
+          # 上流の最新コミットが既に取り込まれている場合は何もしない。
+          if git merge-base --is-ancestor "${upstream_ref}" HEAD; then
+            echo "Upstream is already synchronized."
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # フォーク固有のパッチを残しながら、上流をmergeする。
+          if ! git merge --no-edit "${upstream_ref}"; then
+            echo "::error::Upstreamとのmergeで競合が発生しました。手動で解決してください。"
+            git status --short
+            exit 1
+          fi
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Push synchronized branch
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          git push origin "HEAD:${TARGET_BRANCH}"
