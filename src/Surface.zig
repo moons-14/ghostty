@@ -872,10 +872,9 @@ fn queueIo(
         switch (msg) {
             .write_small,
             .write_stable,
-            => return,
-
-            .write_alloc => |v| {
-                v.alloc.free(v.data);
+            .write_alloc,
+            => {
+                msg.deinit();
                 return;
             },
 
@@ -3681,6 +3680,12 @@ pub fn contentScaleCallback(self: *Surface, content_scale: apprt.ContentScale) !
 fn isMouseReporting(self: *const Surface) bool {
     return self.config.mouse_reporting and
         self.io.terminal.flags.mouse_event != .none;
+}
+
+pub fn mouseReportingActive(self: *Surface) bool {
+    self.renderer_state.mutex.lockUncancelable(global.io());
+    defer self.renderer_state.mutex.unlock(global.io());
+    return self.isMouseReporting();
 }
 
 fn mouseReport(
